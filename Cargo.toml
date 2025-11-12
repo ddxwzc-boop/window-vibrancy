@@ -4,7 +4,7 @@ description = "Make your windows vibrant."
 authors = ["Tauri Programme within The Commons Conservancy"]
 version = "0.6.0"
 edition = "2021"
-rust-version = "1.71"
+rust-version = "1.77"
 license = "Apache-2.0 OR MIT"
 readme = "README.md"
 repository = "https://github.com/tauri-apps/tauri-plugin-vibrancy"
@@ -38,20 +38,23 @@ features = [
 ]
 
 [target.'cfg(target_os = "macos")'.dependencies]
-objc2 = "0.6.0"
-objc2-app-kit = { version = "0.3.0", default-features = false, features = [
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = [
   "std",
+  "objc2-core-foundation",
   "NSApplication",
+  "NSColor",
+  "NSGlassEffectView",
   "NSGraphics",
   "NSResponder",
   "NSView",
   "NSVisualEffectView",
 ] }
-objc2-foundation = { version = "0.3.0", default-features = false, features = [
+objc2-foundation = { version = "0.3", default-features = false, features = [
   "std",
   "NSThread",
   "NSGeometry",
 ] }
-objc2-core-foundation = { version = "0.3.0", default-features = false, features = [
+objc2-core-foundation = { version = "0.3", default-features = false, features = [
   "std",
 ] }

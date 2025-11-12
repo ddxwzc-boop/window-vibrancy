@@ -30,8 +30,10 @@ fn main() {
         .expect("Unsupported platform! 'apply_blur' is only supported on Windows");
 
     #[cfg(target_os = "macos")]
-    apply_vibrancy(&window, NSVisualEffectMaterial::HudWindow, None, None)
-        .expect("Unsupported platform! 'apply_vibrancy' is only supported on macOS");
+    {
+        apply_liquid_glass(&window, NSGlassEffectViewStyle::Clear, None, Some(26.0))
+            .expect("Unsupported platform! 'apply_liquid_glass' is only supported on macOS 26+");
+    }
 
     #[cfg(target_os = "windows")]
     window.set_undecorated_shadow(true);

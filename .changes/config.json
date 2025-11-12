@@ -3,6 +3,7 @@
   "pkgManagers": {
     "rust": {
       "version": true,
+      "postversion": "cargo update window-vibrancy",
       "getPublishedVersion": "cargo search ${ pkg.pkg } --limit 1 | sed -nE 's/^[^\"]*\"//; s/\".*//1p' -",
       "publish": [
         {

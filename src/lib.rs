@@ -27,12 +27,20 @@
 use windows_sys::core::HRESULT;
 
 mod macos;
+#[cfg(target_env = "ohos")]
+mod ohos;
 mod windows;
 
 pub use macos::{NSGlassEffectViewStyle, NSVisualEffectMaterial, NSVisualEffectState};
 
 #[cfg(target_os = "macos")]
 pub use macos::{NSGlassEffectViewTagged, NSVisualEffectViewTagged};
+
+#[cfg(target_env = "ohos")]
+pub use ohos::{
+    apply_ohos_acrylic, apply_ohos_blur, apply_ohos_mica, clear_ohos_acrylic, clear_ohos_blur,
+    clear_ohos_mica,
+};
 
 /// a tuple of RGBA colors. Each value has minimum of 0 and maximum of 255.
 pub type Color = (u8, u8, u8, u8);
@@ -323,6 +331,8 @@ pub enum Error {
         api: &'static str,
         result: HRESULT,
     },
+    #[cfg(target_env = "ohos")]
+    OhosError(String),
 }
 
 impl std::fmt::Display for Error {
@@ -343,6 +353,10 @@ impl std::fmt::Display for Error {
                     "Win32 API {api}() returned the error result 0x{:x}.",
                     result,
                 )
+            }
+            #[cfg(target_env = "ohos")]
+            Error::OhosError(msg) => {
+                write!(f, "OHOS error: {}", msg)
             }
         }
     }

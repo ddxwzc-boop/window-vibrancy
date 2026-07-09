@@ -61,4 +61,4 @@ objc2-core-foundation = { version = "0.3", default-features = false, features = 
 ] }
 
 [target.'cfg(target_env = "ohos")'.dependencies]
-openharmony-ability = { path = "../openharmony-ability/crates/ability", default-features = false, features = ["window"] }
+openharmony-ability = { git = "https://github.com/Eulogizethesun/openharmony-ability", branch = "ohdev-git", default-features = false, features = ["window"] }

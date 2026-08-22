@@ -19,7 +19,9 @@ targets = ["x86_64-apple-darwin", "x86_64-pc-windows-msvc"]
 [dependencies]
 raw-window-handle = "0.6"
 
-[dev-dependencies]
+# tao/winit pull in GTK/glib on Linux which has no pkg-config for OHOS.
+# They are not used in any OHOS test code, so gate them to non-OHOS only.
+[target.'cfg(not(target_env = "ohos"))'.dev-dependencies]
 tao = "0.34"
 winit = "0.30"
 
@@ -62,3 +64,5 @@ objc2-core-foundation = { version = "0.3", default-features = false, features = 
 
 [target.'cfg(target_env = "ohos")'.dependencies]
 openharmony-ability = { path = "../openharmony-ability/crates/ability", default-features = false, features = ["window"] }
+openharmony-ability-plugin-window = { path = "../openharmony-ability/crates/plugin-window" }
+futures-executor = "0.3"

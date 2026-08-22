@@ -39,7 +39,7 @@ pub use macos::{NSGlassEffectViewTagged, NSVisualEffectViewTagged};
 #[cfg(target_env = "ohos")]
 pub use ohos::{
     apply_ohos_acrylic, apply_ohos_blur, apply_ohos_mica, clear_ohos_acrylic, clear_ohos_blur,
-    clear_ohos_mica,
+    clear_ohos_mica, set_ohos_app,
 };
 
 /// a tuple of RGBA colors. Each value has minimum of 0 and maximum of 255.

@@ -113,8 +113,7 @@ pub fn apply_ohos_acrylic(
     color: Option<Color>,
 ) -> Result<(), Error> {
     let c = client()?;
-    let (r, g, b, a) = color.unwrap_or((0, 0, 0, 204));
-    let argb = to_argb(r, g, b, a);
+    let argb = acrylic_argb(color);
     std::thread::spawn(move || {
         // Sequential: blur first, then background color
         if let Err(e) = futures_executor::block_on(c.set_window_blur(window_id, radius)) {
@@ -126,6 +125,19 @@ pub fn apply_ohos_acrylic(
         }
     });
     Ok(())
+}
+
+/// Computes the acrylic background ARGB color from an optional user-provided RGBA.
+/// Falls back to the default semi-transparent black (0, 0, 0, 204) when `color` is `None`.
+fn acrylic_argb(color: Option<Color>) -> u32 {
+    let (r, g, b, a) = color.unwrap_or((0, 0, 0, 204));
+    to_argb(r, g, b, a)
+}
+
+/// Computes the optional mica tint ARGB color. `None` means no tint is applied.
+/// `Some(true)` → dark tint (0xE6000000), `Some(false)` → light tint (0xE6FFFFFF).
+fn mica_tint_argb(dark: Option<bool>) -> Option<u32> {
+    dark.map(|is_dark| if is_dark { 0xE6000000u32 } else { 0xE6FFFFFFu32 })
 }
 
 /// Pack RGBA color components into a single u32 in ARGB format (alpha in high byte).
@@ -147,9 +159,7 @@ pub fn apply_ohos_mica(
     dark: Option<bool>,
 ) -> Result<(), Error> {
     let c = client()?;
-    let tint_argb = dark.map(|is_dark| {
-        if is_dark { 0xE6000000u32 } else { 0xE6FFFFFFu32 }
-    });
+    let tint_argb = mica_tint_argb(dark);
     std::thread::spawn(move || {
         // Sequential: blur first, then tint
         if let Err(e) = futures_executor::block_on(c.set_window_blur(window_id, radius)) {
@@ -237,5 +247,46 @@ mod tests {
         // Mica light tint: 0xE6FFFFFF
         let result = to_argb(255, 255, 255, 0xE6);
         assert_eq!(result, 0xE6FFFFFF);
+    }
+
+    // ── acrylic_argb ──────────────────────────────────────────────────────
+
+    #[test]
+    fn acrylic_argb_default_color() {
+        // Default: (0, 0, 0, 204) → 0xCC000000
+        assert_eq!(acrylic_argb(None), 0xCC000000);
+    }
+
+    #[test]
+    fn acrylic_argb_custom_color() {
+        // Custom: (255, 128, 0, 200)
+        assert_eq!(acrylic_argb(Some((255, 128, 0, 200))), 0xC8FF8000);
+    }
+
+    #[test]
+    fn acrylic_argb_transparent() {
+        assert_eq!(acrylic_argb(Some((0, 0, 0, 0))), 0x00000000);
+    }
+
+    #[test]
+    fn acrylic_argb_opaque_white() {
+        assert_eq!(acrylic_argb(Some((255, 255, 255, 255))), 0xFFFFFFFF);
+    }
+
+    // ── mica_tint_argb ────────────────────────────────────────────────────
+
+    #[test]
+    fn mica_tint_none_yields_none() {
+        assert_eq!(mica_tint_argb(None), None);
+    }
+
+    #[test]
+    fn mica_tint_dark() {
+        assert_eq!(mica_tint_argb(Some(true)), Some(0xE6000000));
+    }
+
+    #[test]
+    fn mica_tint_light() {
+        assert_eq!(mica_tint_argb(Some(false)), Some(0xE6FFFFFF));
     }
 }

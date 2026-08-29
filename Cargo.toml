@@ -66,3 +66,4 @@ objc2-core-foundation = { version = "0.3", default-features = false, features = 
 openharmony-ability = { path = "../openharmony-ability/crates/ability", default-features = false, features = ["window"] }
 openharmony-ability-plugin-window = { path = "../openharmony-ability/crates/plugin-window" }
 futures-executor = "0.3"
+log = "0.4"

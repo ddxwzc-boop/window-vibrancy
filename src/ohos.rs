@@ -22,14 +22,20 @@ static WINDOW_CLIENT: OnceLock<WindowClient> = OnceLock::new();
 ///
 /// Must be called once during app setup (before any vibrancy function is invoked).
 /// The `WindowClient` is created from the app's bridge runtime and stored globally.
+///
+/// # Panics
+///
+/// Panics if `WindowClient::new` fails. This is acceptable because it is a one-time
+/// init during app startup: if the bridge runtime cannot construct the window client,
+/// no vibrancy call could ever succeed and the app is in an unrecoverable state.
+/// A duplicate call (after the first successful init) is ignored.
 pub fn set_ohos_app(app: &openharmony_ability::OpenHarmonyApp) {
     let client = WindowClient::new(app)
         .expect("Failed to create WindowClient for vibrancy");
-    eprintln!("[vibrancy] set_ohos_app: WindowClient created OK");
     if WINDOW_CLIENT.set(client).is_err() {
-        eprintln!("[vibrancy] WINDOW_CLIENT already initialized; ignoring duplicate call");
-    } else {
-        eprintln!("[vibrancy] WINDOW_CLIENT initialized (first time)");
+        log::warn!(
+            "[vibrancy] WINDOW_CLIENT already initialized; ignoring duplicate set_ohos_app call"
+        );
     }
 }
 
@@ -51,7 +57,8 @@ fn client() -> Result<&'static WindowClient, Error> {
 /// If the main thread blocks (via `block_on` OR `recv()`), the callback can never
 /// fire → THREAD_BLOCK deadlock (appfreeze THREAD_BLOCK_6S). The bridge source
 /// explicitly documents this constraint:
-/// > "必须从 worker 线程调用 —— N-API 主线程在等待其自身的 TSFN 队列时会死锁"
+/// > "Must be called from a worker thread — the N-API main thread deadlocks when
+/// > waiting for its own TSFN queue."
 ///
 /// Previous attempt: moved `block_on` to a worker thread and `recv()`'d the
 /// result on the main thread. This still deadlocked because `recv()` blocks the
@@ -62,6 +69,13 @@ fn client() -> Result<&'static WindowClient, Error> {
 /// synchronous error reporting. The background thread runs `block_on` while the
 /// main thread's event loop stays free to dispatch the TSFN callback. The future
 /// completes normally on the background thread; the result is silently discarded.
+///
+/// Note: `clear_ohos_blur`, `apply_ohos_acrylic`, and `apply_ohos_mica` below
+/// duplicate this fire-and-forget pattern inline (instead of calling `block_bridge`)
+/// because they issue multiple sequential `block_on` calls and bail early on the
+/// first failure, which `block_bridge`'s single-future signature does not express.
+/// Unifying them into a shared helper would require a multi-step combinator and
+/// is intentionally deferred until it can be validated on a device.
 fn block_bridge<F, T, E>(fut: F) -> Result<(), Error>
 where
     F: std::future::Future<Output = std::result::Result<T, E>> + Send + 'static,
@@ -69,10 +83,8 @@ where
     E: std::fmt::Display + Send + 'static,
 {
     std::thread::spawn(move || {
-        let result = futures_executor::block_on(fut);
-        match &result {
-            Ok(_) => eprintln!("[vibrancy] bridge call OK (fire-and-forget)"),
-            Err(e) => eprintln!("[vibrancy] bridge call failed (fire-and-forget): {}", e),
+        if let Err(e) = futures_executor::block_on(fut) {
+            log::error!("[vibrancy] bridge call failed (fire-and-forget): {}", e);
         }
     });
     Ok(())
@@ -83,7 +95,6 @@ where
 /// `window_id` is the OHOS window ID (0 = main window, positive = sub-window).
 /// `radius` is the blur radius in pixels (0 = no blur).
 pub fn apply_ohos_blur(window_id: i64, radius: f64) -> Result<(), Error> {
-    eprintln!("[vibrancy] apply_ohos_blur: window_id={} radius={}", window_id, radius);
     block_bridge(client()?.set_window_blur(window_id, radius))
 }
 
@@ -92,13 +103,15 @@ pub fn apply_ohos_blur(window_id: i64, radius: f64) -> Result<(), Error> {
 /// Safe for blur-only: apply_ohos_blur doesn't set backgroundColor, so resetting to transparent is a no-op.
 pub fn clear_ohos_blur(window_id: i64) -> Result<(), Error> {
     let c = client()?;
+    // Fire-and-forget inline (multi-step, early-bail). See `block_bridge` for the
+    // rationale on why the main thread must not block on a bridge response.
     std::thread::spawn(move || {
         if let Err(e) = futures_executor::block_on(c.set_window_blur(window_id, 0.0)) {
-            eprintln!("[vibrancy] clear blur failed: {}", e);
+            log::error!("[vibrancy] clear blur failed: {}", e);
             return;
         }
         if let Err(e) = futures_executor::block_on(c.set_window_background_color(window_id, 0x00000000)) {
-            eprintln!("[vibrancy] clear background failed: {}", e);
+            log::error!("[vibrancy] clear background failed: {}", e);
         }
     });
     Ok(())
@@ -114,14 +127,16 @@ pub fn apply_ohos_acrylic(
 ) -> Result<(), Error> {
     let c = client()?;
     let argb = acrylic_argb(color);
+    // Fire-and-forget inline (multi-step, early-bail). See `block_bridge` for the
+    // rationale on why the main thread must not block on a bridge response.
     std::thread::spawn(move || {
         // Sequential: blur first, then background color
         if let Err(e) = futures_executor::block_on(c.set_window_blur(window_id, radius)) {
-            eprintln!("[vibrancy] acrylic blur failed: {}", e);
+            log::error!("[vibrancy] acrylic blur failed: {}", e);
             return;
         }
         if let Err(e) = futures_executor::block_on(c.set_window_background_color(window_id, argb)) {
-            eprintln!("[vibrancy] acrylic background failed: {}", e);
+            log::error!("[vibrancy] acrylic background failed: {}", e);
         }
     });
     Ok(())
@@ -160,15 +175,17 @@ pub fn apply_ohos_mica(
 ) -> Result<(), Error> {
     let c = client()?;
     let tint_argb = mica_tint_argb(dark);
+    // Fire-and-forget inline (multi-step, early-bail). See `block_bridge` for the
+    // rationale on why the main thread must not block on a bridge response.
     std::thread::spawn(move || {
         // Sequential: blur first, then tint
         if let Err(e) = futures_executor::block_on(c.set_window_blur(window_id, radius)) {
-            eprintln!("[vibrancy] mica blur failed: {}", e);
+            log::error!("[vibrancy] mica blur failed: {}", e);
             return;
         }
         if let Some(argb) = tint_argb {
             if let Err(e) = futures_executor::block_on(c.set_window_background_color(window_id, argb)) {
-                eprintln!("[vibrancy] mica tint failed: {}", e);
+                log::error!("[vibrancy] mica tint failed: {}", e);
             }
         }
     });

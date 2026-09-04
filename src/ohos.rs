@@ -10,6 +10,14 @@
 //!
 //! The `WindowClient` is initialized once via [`set_ohos_app`] and stored in a global
 //! `OnceCell`, mirroring the tray-icon initialization pattern.
+//!
+//! # Asynchronous semantics
+//!
+//! All effect functions are fire-and-forget: the bridge call is spawned on a
+//! background thread and takes effect asynchronously, and a failing bridge call
+//! is only logged (never returned). The `Result` returned by these functions
+//! therefore only reflects initialization state — it is `Err` only when
+//! [`set_ohos_app`] was never called.
 
 use crate::{Color, Error};
 
@@ -70,9 +78,9 @@ fn client() -> Result<&'static WindowClient, Error> {
 /// main thread's event loop stays free to dispatch the TSFN callback. The future
 /// completes normally on the background thread; the result is silently discarded.
 ///
-/// Note: `clear_ohos_blur`, `apply_ohos_acrylic`, and `apply_ohos_mica` below
-/// duplicate this fire-and-forget pattern inline (instead of calling `block_bridge`)
-/// because they issue multiple sequential `block_on` calls and bail early on the
+/// Note: `clear_ohos_blur` and `apply_ohos_acrylic` below duplicate this
+/// fire-and-forget pattern inline (instead of calling `block_bridge`) because
+/// they issue multiple sequential `block_on` calls and bail early on the
 /// first failure, which `block_bridge`'s single-future signature does not express.
 /// Unifying them into a shared helper would require a multi-step combinator and
 /// is intentionally deferred until it can be validated on a device.
@@ -94,13 +102,21 @@ where
 ///
 /// `window_id` is the OHOS window ID (0 = main window, positive = sub-window).
 /// `radius` is the blur radius in pixels (0 = no blur).
+///
+/// Takes effect asynchronously; a failing bridge call is only logged. The
+/// returned `Result` only reflects initialization state (see the module-level
+/// "Asynchronous semantics" section).
 pub fn apply_ohos_blur(window_id: i64, radius: f64) -> Result<(), Error> {
     block_bridge(client()?.set_window_blur(window_id, radius))
 }
 
 /// Clears blur effect from an OHOS window.
-/// Also resets background color to transparent, so acrylic/mica tints don't persist after clearEffects.
+/// Also resets background color to transparent, so acrylic tints don't persist after clearEffects.
 /// Safe for blur-only: apply_ohos_blur doesn't set backgroundColor, so resetting to transparent is a no-op.
+///
+/// Takes effect asynchronously; a failing bridge call is only logged. The
+/// returned `Result` only reflects initialization state (see the module-level
+/// "Asynchronous semantics" section).
 pub fn clear_ohos_blur(window_id: i64) -> Result<(), Error> {
     let c = client()?;
     // Fire-and-forget inline (multi-step, early-bail). See `block_bridge` for the
@@ -120,6 +136,10 @@ pub fn clear_ohos_blur(window_id: i64) -> Result<(), Error> {
 /// Applies acrylic-like effect to an OHOS window.
 ///
 /// Combines blur with a semi-transparent background color.
+///
+/// Takes effect asynchronously; a failing bridge call is only logged. The
+/// returned `Result` only reflects initialization state (see the module-level
+/// "Asynchronous semantics" section).
 pub fn apply_ohos_acrylic(
     window_id: i64,
     radius: f64,
@@ -149,52 +169,9 @@ fn acrylic_argb(color: Option<Color>) -> u32 {
     to_argb(r, g, b, a)
 }
 
-/// Computes the optional mica tint ARGB color. `None` means no tint is applied.
-/// `Some(true)` → dark tint (0xE6000000), `Some(false)` → light tint (0xE6FFFFFF).
-fn mica_tint_argb(dark: Option<bool>) -> Option<u32> {
-    dark.map(|is_dark| if is_dark { 0xE6000000u32 } else { 0xE6FFFFFFu32 })
-}
-
 /// Pack RGBA color components into a single u32 in ARGB format (alpha in high byte).
 fn to_argb(r: u8, g: u8, b: u8, a: u8) -> u32 {
     ((a as u32) << 24) | ((r as u32) << 16) | ((g as u32) << 8) | (b as u32)
-}
-
-/// Clears acrylic effect from an OHOS window.
-pub fn clear_ohos_acrylic(window_id: i64) -> Result<(), Error> {
-    clear_ohos_blur(window_id)
-}
-
-/// Applies mica-like effect to an OHOS window.
-///
-/// Combines blur with an optional dark/light background tint.
-pub fn apply_ohos_mica(
-    window_id: i64,
-    radius: f64,
-    dark: Option<bool>,
-) -> Result<(), Error> {
-    let c = client()?;
-    let tint_argb = mica_tint_argb(dark);
-    // Fire-and-forget inline (multi-step, early-bail). See `block_bridge` for the
-    // rationale on why the main thread must not block on a bridge response.
-    std::thread::spawn(move || {
-        // Sequential: blur first, then tint
-        if let Err(e) = futures_executor::block_on(c.set_window_blur(window_id, radius)) {
-            log::error!("[vibrancy] mica blur failed: {}", e);
-            return;
-        }
-        if let Some(argb) = tint_argb {
-            if let Err(e) = futures_executor::block_on(c.set_window_background_color(window_id, argb)) {
-                log::error!("[vibrancy] mica tint failed: {}", e);
-            }
-        }
-    });
-    Ok(())
-}
-
-/// Clears mica effect from an OHOS window.
-pub fn clear_ohos_mica(window_id: i64) -> Result<(), Error> {
-    clear_ohos_blur(window_id)
 }
 
 #[cfg(test)]
@@ -252,20 +229,6 @@ mod tests {
         assert_eq!(result, 0xCC000000);
     }
 
-    #[test]
-    fn to_argb_mica_dark_tint() {
-        // Mica dark tint: 0xE6000000
-        let result = to_argb(0, 0, 0, 0xE6);
-        assert_eq!(result, 0xE6000000);
-    }
-
-    #[test]
-    fn to_argb_mica_light_tint() {
-        // Mica light tint: 0xE6FFFFFF
-        let result = to_argb(255, 255, 255, 0xE6);
-        assert_eq!(result, 0xE6FFFFFF);
-    }
-
     // ── acrylic_argb ──────────────────────────────────────────────────────
 
     #[test]
@@ -288,22 +251,5 @@ mod tests {
     #[test]
     fn acrylic_argb_opaque_white() {
         assert_eq!(acrylic_argb(Some((255, 255, 255, 255))), 0xFFFFFFFF);
-    }
-
-    // ── mica_tint_argb ────────────────────────────────────────────────────
-
-    #[test]
-    fn mica_tint_none_yields_none() {
-        assert_eq!(mica_tint_argb(None), None);
-    }
-
-    #[test]
-    fn mica_tint_dark() {
-        assert_eq!(mica_tint_argb(Some(true)), Some(0xE6000000));
-    }
-
-    #[test]
-    fn mica_tint_light() {
-        assert_eq!(mica_tint_argb(Some(false)), Some(0xE6FFFFFF));
     }
 }

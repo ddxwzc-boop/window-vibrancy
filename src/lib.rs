@@ -7,6 +7,7 @@
 //! ## Platform-specific
 //!
 //! - **Linux**: Unsupported, Blur and any vibrancy effects are controlled by the compositor installed on the end-user system.
+//! - **OHOS**: Vibrancy is applied through the bridge-based `apply_ohos_blur` / `apply_ohos_acrylic` API after initializing with `set_ohos_app` (cleared via `clear_ohos_blur`). Effects apply asynchronously and failures are logged, not returned; the `Result` of those functions only reflects initialization state.
 //!
 //! # Example
 //!
@@ -37,10 +38,7 @@ pub use macos::{NSGlassEffectViewStyle, NSVisualEffectMaterial, NSVisualEffectSt
 pub use macos::{NSGlassEffectViewTagged, NSVisualEffectViewTagged};
 
 #[cfg(target_env = "ohos")]
-pub use ohos::{
-    apply_ohos_acrylic, apply_ohos_blur, apply_ohos_mica, clear_ohos_acrylic, clear_ohos_blur,
-    clear_ohos_mica, set_ohos_app,
-};
+pub use ohos::{apply_ohos_acrylic, apply_ohos_blur, clear_ohos_blur, set_ohos_app};
 
 /// a tuple of RGBA colors. Each value has minimum of 0 and maximum of 255.
 pub type Color = (u8, u8, u8, u8);
@@ -58,6 +56,7 @@ pub type Color = (u8, u8, u8, u8);
 ///
 /// - **Windows**: *`color`* is ignored on Windows 7 and has no effect.
 /// - **Linux / macOS**: Unsupported.
+/// - **OHOS**: Unsupported; use `apply_ohos_blur` instead.
 pub fn apply_blur(
     window: impl raw_window_handle::HasWindowHandle,
     #[allow(unused)] color: Option<Color>,
@@ -78,6 +77,7 @@ pub fn apply_blur(
 /// ## Platform-specific
 ///
 /// - **Linux / macOS**: Unsupported.
+/// - **OHOS**: Unsupported; use `clear_ohos_blur` instead.
 pub fn clear_blur(window: impl raw_window_handle::HasWindowHandle) -> Result<(), Error> {
     match window.window_handle()?.as_raw() {
         #[cfg(target_os = "windows")]
@@ -103,6 +103,7 @@ pub fn clear_blur(window: impl raw_window_handle::HasWindowHandle) -> Result<(),
 ///
 /// - **Windows**: *`color`* is ignored on Windows 7 and has no effect.
 /// - **Linux / macOS**: Unsupported.
+/// - **OHOS**: Unsupported; use `apply_ohos_acrylic` instead.
 pub fn apply_acrylic(
     window: impl raw_window_handle::HasWindowHandle,
     #[allow(unused)] color: Option<Color>,
@@ -123,6 +124,7 @@ pub fn apply_acrylic(
 /// ## Platform-specific
 ///
 /// - **Linux / macOS**: Unsupported.
+/// - **OHOS**: Unsupported; use `clear_ohos_blur` instead.
 pub fn clear_acrylic(window: impl raw_window_handle::HasWindowHandle) -> Result<(), Error> {
     match window.window_handle()?.as_raw() {
         #[cfg(target_os = "windows")]
@@ -144,6 +146,7 @@ pub fn clear_acrylic(window: impl raw_window_handle::HasWindowHandle) -> Result<
 /// ## Platform-specific
 ///
 /// - **Linux / macOS**: Unsupported.
+/// - **OHOS**: Unsupported (Mica has no OHOS counterpart).
 pub fn apply_mica(
     window: impl raw_window_handle::HasWindowHandle,
     dark: Option<bool>,
@@ -166,6 +169,7 @@ pub fn apply_mica(
 /// ## Platform-specific
 ///
 /// - **Linux / macOS**: Unsupported.
+/// - **OHOS**: Unsupported (Mica has no OHOS counterpart).
 pub fn clear_mica(window: impl raw_window_handle::HasWindowHandle) -> Result<(), Error> {
     match window.window_handle()?.as_raw() {
         #[cfg(target_os = "windows")]
@@ -187,6 +191,7 @@ pub fn clear_mica(window: impl raw_window_handle::HasWindowHandle) -> Result<(),
 /// ## Platform-specific
 ///
 /// - **Linux / macOS**: Unsupported.
+/// - **OHOS**: Unsupported (Mica has no OHOS counterpart).
 pub fn apply_tabbed(
     window: impl raw_window_handle::HasWindowHandle,
     dark: Option<bool>,
@@ -209,6 +214,7 @@ pub fn apply_tabbed(
 /// ## Platform-specific
 ///
 /// - **Linux / macOS**: Unsupported.
+/// - **OHOS**: Unsupported (Mica has no OHOS counterpart).
 pub fn clear_tabbed(window: impl raw_window_handle::HasWindowHandle) -> Result<(), Error> {
     match window.window_handle()?.as_raw() {
         #[cfg(target_os = "windows")]
@@ -226,6 +232,7 @@ pub fn clear_tabbed(window: impl raw_window_handle::HasWindowHandle) -> Result<(
 /// ## Platform-specific
 ///
 /// - **Linux / Windows**: Unsupported.
+/// - **OHOS**: Unsupported; use `apply_ohos_blur` instead.
 pub fn apply_vibrancy(
     window: impl raw_window_handle::HasWindowHandle,
     #[allow(unused)] effect: NSVisualEffectMaterial,
@@ -248,6 +255,7 @@ pub fn apply_vibrancy(
 /// ## Platform-specific
 ///
 /// - **Linux / Windows**: Unsupported.
+/// - **OHOS**: Unsupported; use `clear_ohos_blur` instead.
 ///
 /// # Returns
 ///
@@ -270,6 +278,7 @@ pub fn clear_vibrancy(window: impl raw_window_handle::HasWindowHandle) -> Result
 /// ## Platform-specific
 ///
 /// - **Linux / Windows**: Unsupported.
+/// - **OHOS**: Unsupported.
 ///
 /// # Example
 ///
@@ -302,6 +311,7 @@ pub fn apply_liquid_glass(
 /// ## Platform-specific
 ///
 /// - **Linux / Windows**: Unsupported.
+/// - **OHOS**: Unsupported.
 ///
 /// # Returns
 ///
